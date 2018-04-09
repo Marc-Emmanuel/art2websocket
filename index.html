@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<title>Demo websocket</title>
+	<link rel="stylesheet" href="style.css" type="text/css" charset="utf-8">
+</head>
+	<body onload="">
+		<script type="text/javascript">
+		window.onload = function() {
+			// Constants
+			var IPAD_AIR_PPI = 264; // iPad Air ppi
+			var INCH_TO_MM_RATIO = 25.4; // 1 inch = 25.4 mm
+			var IPAD_AIR_HEIGHT = 240; // iPad Air height(mm)
+			var IPAD_AIR_WIDTH = 169.5; // iPad Air width(mm)
+			var IPAD_AIR_DEPTH = 7.5; // iPad Air depth(mm)
+			
+			// vars
+			var logInputMessages = true;
+			
+			// Canvas stuff
+			var canvas = document.getElementById( 'canvas' );
+			var context = canvas.getContext( '2d' );
+			var targetColors = [ "rgb(200,100,100)", "rgb(200,0,100)", "rgb(200,100,0)", "rgb(100,200,0)",
+								 "rgb(0,200,100)", "rgb(100,200,100)", "rgb(100,0,200)", "rgb(0,100,200)",
+								 "rgb(100,100,200)", "rgb(200,0,0)" ];
+			
+			function parseARTMessage( string ) {
+				var regBody = /bodyID:\s([0-9]+),\squality:\s([-0-9.]+),\sx:\s([-0-9.]+),\sy:\s([-0-9.]+),\sz:\s([-0-9.]+),\srotX:\s([-0-9.]+),\srotY:\s([-0-9.]+),\srotZ:\s([-0-9.]+),\stimestamp:\s([0-9.]+)/;
+				var regHand = /HandID:\s([0-9]+),\squality:\s([-0-9.]+),\shandLR:\s([-0-9.]+),\sNbFinger:\s([-0-9.]+),\sx:\s([-0-9.]+),\sy:\s([-0-9.]+),\sz:\s([-0-9.]+),\srotX:\s([-0-9.]+),\srotY:\s([-0-9.]+),\srotZ:\s([-0-9.]+),\sfingers:\s(.+),\stimestamp:\s([0-9.]+)/;
+				var regFinger = /fingerID:\s([0-9]+),\sx:\s([-0-9.]+),\sy:\s([-0-9.]+),\sz:\s([-0-9.]+),\srotX:\s([-0-9.]+),\srotY:\s([-0-9.]+),\srotZ:\s([-0-9.]+),\sfingerRadiusTip:\s([-0-9.]+),\sphalanxLengthX:\s([-0-9.]+),\sphalanxLengthY:\s([-0-9.]+),\sphalanxLengthZ:\s([-0-9.]+),\sphalanxAngle1:\s([-0-9.]+),\sphalanxAngle2:\s([-0-9.]+),\stimestamp:\s([0-9.]+)/g;
+				if ( regBody.test( string )) {
+					var match = regBody.exec( string );
+					return { "bodyID": match[1], "quality": match[2], "x": match[3], "y": match[4], "z": match[5], "rotX": match[6], "rotY": match[7], "rotZ": match[8], "timestamp": match[9]};
+				} else if ( regHand.test( string )) {
+					var match = regHand.exec( string );
+					console.log( "Parsing as Hand data" );
+					var matchFinger;
+					var fingers = [];
+					// match all finger expressions
+					while ( matchFinger = regFinger.exec( match[11])) {
+						fingers.push({ "fingerID": matchFinger[1], "x": matchFinger[2], "y": matchFinger[3], "z": matchFinger[4], "rotX": matchFinger[5], "rotY": matchFinger[6], "rotZ": matchFinger[7], "fingerRadiusTip": matchFinger[8], "phalanxLengthX": matchFinger[9], "phalanxLengthY": matchFinger[10], "phalanxLengthZ": matchFinger[11], "phalanxAngle1": matchFinger[12], "phalanxAngle2": matchFinger[13], "timestamp": matchFinger[14] });
+					}
+					return { "handID": match[1], "quality": match[2], "handLR": match[3], "NbFinger": match[4], "x": match[5], "y": match[6], "z": match[7], "rotX": match[8], "rotY": match[9], "rotZ": match[10], "fingers": fingers, "timestamp": match[12]};
+				}
+			}
+			
+			// WebSocket stuff
+			var socket = new WebSocket( "ws://localhost:9012" );
+
+			// WebSocket event
+			socket.onmessage = function( event ) {
+				if ( logInputMessages ) {
+					console.log( event.data );
+				}
+				var target = parseARTMessage( event.data );
+				if ( target !== undefined ) {
+					
+					if ( target.bodyID !== undefined ) {
+						context.fillStyle = targetColors[ target.bodyID ];
+				
+						// console.log( target );
+						// Draw target on the canvas
+						context.clearRect ( 0 , 0 , canvas.width, canvas.height );
+						context.fillText( "( " + target.x + ", " + target.z + " )", 5 + target.x, 10 + target.z );
+						context.beginPath();
+						context.arc( target.x, target.z, 5, 5, Math.PI * 2, true );
+						context.fill();
+						context.fillText( "Timestamp: " + target.timestamp , 5, 10 );
+					} else if ( target.handID !== undefined ) {
+						context.clearRect ( 0 , 0 , canvas.width, canvas.height );
+						// Draw hand
+						context.fillText( "( " + target.x + ", " + target.z + " )", 5 + target.x, 10 + target.z );
+						context.beginPath();
+						context.arc( target.x, target.z, 5, 5, Math.PI * 2, true );
+						context.fill();
+						// Draw fingers
+						for ( var i = 0 ; i < target.fingers.length ; i++ ) {
+							context.fillStyle = targetColors[ i ];
+							context.fillText( "( " + target.fingers[i].x + ", " + target.z + " )", 5 + target.fingers[i].z, 10 + target.z );
+							context.beginPath();
+							context.arc( target.fingers[i].x, target.fingers[i].z, 5, 5, Math.PI * 2, true );
+							context.fill();
+						}
+						context.fillText( "Timestamp: " + target.timestamp , 5, 10 );
+					} else {
+						console.log( "unidentified target" );
+					}
+				}
+			}
+
+			socket.onclose = function( event ) {
+				// See https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent for code explanation
+				var clean = event.wasClean ? "clean" : "unclean";
+				console.log( "Closing communication with websocket: " + event.reason + "[" + event.code + "]: " + clean + " termination" );
+			}
+
+			socket.onerror = function() {
+				console.log( "Error communicating with websocket" );
+			}
+			
+			// Poll new data every 100 ms
+			// window.setInterval( function() { socket.send( 'getEvents' ) }, 100 );
+		}
+		</script>
+		<canvas id="canvas" width="1000" height="1000"></canvas>
+	</body>
+</html>
